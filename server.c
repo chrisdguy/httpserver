@@ -49,6 +49,25 @@ char *read_file(char *path) {
 	return tmp;
 }
 
+void send_response(char *file_contents,int client_sock){
+	char *response = malloc(2048);
+	
+	if (file_contents == NULL) {
+		char *not_found = "<h1>404 Not Found</h1>";
+		int response_len = strlen(not_found);
+		sprintf(response, "HTTP/1.1 404 Not Found\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n%s", response_len, not_found);
+	} else {
+		int response_len = strlen(file_contents);
+		sprintf(response, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n%s", response_len, file_contents);
+	}
+	free(file_contents);
+	
+	if (send(client_sock, response, strlen(response), 0) < 0) {
+		perror("Failed to send response.");
+		exit(EXIT_FAILURE);
+	}
+}
+
 int main() {
 	// Initialize the socket
 	int sock_desc = socket(AF_INET, SOCK_STREAM, 0);
@@ -138,23 +157,8 @@ int main() {
 
 	// Sends response dynamically
 	char *file_contents = read_file(path);
-	char *response = malloc(2048);
-	
-	if (file_contents == NULL) {
-		char *not_found = "<h1>404 Not Found</h1>";
-		int response_len = strlen(not_found);
-		sprintf(response, "HTTP/1.1 404 Not Found\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n%s", response_len, not_found);
-	} else {
-		int response_len = strlen(file_contents);
-		sprintf(response, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n%s", response_len, file_contents);
-	}
+	send_response(file_contents, client_sock);
 	free(buffer);
-
-
-	if (send(client_sock, response, strlen(response), 0) < 0) {
-		perror("Failed to send response.");
-		exit(EXIT_FAILURE);
-	}
 
 
 	// Clean up

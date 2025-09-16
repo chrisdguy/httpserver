@@ -9,6 +9,45 @@
 #define INITIAL_BUFFER_SIZE 1024
 #define MAX_CONNECTIONS 5
 #define PORT 42069
+#define MAX_LENGTH 4096
+
+
+char *read_file(char *path) {
+	char *fp = malloc((strlen("public") + strlen(path)) * sizeof(char));
+	sprintf(fp, "public%s", path);
+	int capacity = MAX_LENGTH;
+	char *tmp = malloc(capacity * sizeof(char));
+	if (tmp == NULL) {
+		perror("Memory allocation failed.\n");
+		exit(EXIT_FAILURE);
+	}
+	int tmp_size = 0;
+	
+	FILE *f = fopen(fp, "r");
+	if (f == NULL) {
+		perror("Unable to open file.\n");
+		return NULL;
+	}
+	int size = 0;
+	do {
+		if (tmp_size + MAX_LENGTH >= capacity) {
+			capacity *= 2;
+			tmp = realloc(tmp, capacity * sizeof(char));
+			if (tmp == NULL) {
+				perror("Memory reallocation failed.\n");
+				exit(1);
+			}
+		}
+			
+		size = fread(tmp + tmp_size, sizeof(char), MAX_LENGTH, f);
+		tmp_size += size;
+	} while (size > 0);
+	
+	fclose(f);
+	free(fp);
+	
+	return tmp;
+}
 
 int main() {
 	// Initialize the socket
@@ -56,7 +95,7 @@ int main() {
 
 	// Reads request to a buffer
 	int buffer_size = INITIAL_BUFFER_SIZE;
-	char *buffer = malloc(INITIAL_BUFFER_SIZE);
+	char *buffer = malloc(INITIAL_BUFFER_SIZE * sizeof(char));
 	if (!buffer) {
 		perror("malloc failed");
 		exit(EXIT_FAILURE);
@@ -79,7 +118,7 @@ int main() {
 	printf("%s", buffer);
 
 	
-	// Parse the request line
+	// Parses the request line
 	char *request = strtok(buffer, "\r\n");
 	if (request == NULL) {
 		perror("Request is NULL."); exit(EXIT_FAILURE);
@@ -97,22 +136,17 @@ int main() {
 		perror("Version is NULL."); exit(EXIT_FAILURE);
 	}
 
-	// Sends response
-	char *root = "<h1>ROOT!</h1>";
-	char *about = "<h1>ABOUT!</h1>";
-	char *not_found = "<h1>404 Not Found</h1>";
-
+	// Sends response dynamically
+	char *file_contents = read_file(path);
 	char *response = malloc(2048);
-
-	if (strcmp(path, "/") == 0) {
-		int response_len = strlen(root);
-		sprintf(response, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n%s", response_len, root);
-	} else if (strcmp(path, "/about") == 0) {
-		int response_len = strlen(about);
-		sprintf(response, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n%s", response_len, about);
-	} else {
+	
+	if (file_contents == NULL) {
+		char *not_found = "<h1>404 Not Found</h1>";
 		int response_len = strlen(not_found);
 		sprintf(response, "HTTP/1.1 404 Not Found\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n%s", response_len, not_found);
+	} else {
+		int response_len = strlen(file_contents);
+		sprintf(response, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n%s", response_len, file_contents);
 	}
 	free(buffer);
 

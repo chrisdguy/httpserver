@@ -1,3 +1,4 @@
+#include <iso646.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,6 +14,7 @@
 
 
 char *read_file(char *path) {
+    if (strcmp(path, "/") == 0) path = "/index.html";
 	char *fp = malloc((strlen("public") + strlen(path)) * sizeof(char));
 	sprintf(fp, "public%s", path);
 	int capacity = MAX_LENGTH;
@@ -22,7 +24,7 @@ char *read_file(char *path) {
 		exit(EXIT_FAILURE);
 	}
 	int tmp_size = 0;
-	
+
 	FILE *f = fopen(fp, "r");
 	if (f == NULL) {
 		perror("Unable to open file.\n");
@@ -38,34 +40,65 @@ char *read_file(char *path) {
 				exit(1);
 			}
 		}
-			
+
 		size = fread(tmp + tmp_size, sizeof(char), MAX_LENGTH, f);
 		tmp_size += size;
 	} while (size > 0);
-	
+
 	fclose(f);
 	free(fp);
-	
+
 	return tmp;
 }
 
 void send_response(char *file_contents,int client_sock){
-	char *response = malloc(2048);
-	
-	if (file_contents == NULL) {
-		char *not_found = "<h1>404 Not Found</h1>";
-		int response_len = strlen(not_found);
-		sprintf(response, "HTTP/1.1 404 Not Found\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n%s", response_len, not_found);
-	} else {
+    char *response;
+    if (file_contents == NULL) {
+        char *not_found_header = "HTTP/1.1 404 Not Found\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n%s";
+        char *not_found_body = "<h1>404 Not Found</h1>";
+        int not_found_body_len = strlen(not_found_body);
+
+        int tmp = not_found_body_len;
+        int count = 0;
+        if (tmp == 0) {
+            count = 1;
+        } else {
+            if (tmp < 0) {
+                tmp= -tmp;
+            } while (tmp > 10) {
+                tmp /= 10;
+                count++;
+            }
+        }
+
+        response = malloc((strlen(not_found_header) + not_found_body_len + count -4) * sizeof(char));
+        sprintf(response, not_found_header, not_found_body_len, not_found_body);
+    } else {
+        char *ok_header = "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n%s";
 		int response_len = strlen(file_contents);
-		sprintf(response, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n%s", response_len, file_contents);
+
+		int tmp = response_len;
+        int count = 0;
+        if (tmp == 0) {
+            count = 1;
+        } else {
+            if (tmp < 0) {
+                tmp= -tmp;
+            } while (tmp > 10) {
+                tmp /= 10;
+                count++;
+            }
+        }
+        response = malloc((strlen(ok_header) + response_len + count - 4) * sizeof(char));
+		sprintf(response, ok_header, response_len, file_contents);
 	}
 	free(file_contents);
-	
+
 	if (send(client_sock, response, strlen(response), 0) < 0) {
 		perror("Failed to send response.");
 		exit(EXIT_FAILURE);
 	}
+	free(response);
 }
 
 int main() {
@@ -101,6 +134,8 @@ int main() {
 	}
 
 	// Accepts incomming connection & prints client info
+
+	while (1) {
 	struct sockaddr_in client_addr;
 	socklen_t client_len = sizeof(client_addr);
 	struct sockaddr *client_addr_ptr = (struct sockaddr *)&client_addr;
@@ -136,7 +171,7 @@ int main() {
 	}
 	printf("%s", buffer);
 
-	
+
 	// Parses the request line
 	char *request = strtok(buffer, "\r\n");
 	if (request == NULL) {
@@ -159,10 +194,9 @@ int main() {
 	char *file_contents = read_file(path);
 	send_response(file_contents, client_sock);
 	free(buffer);
-
-
-	// Clean up
 	close(client_sock);
+
+	}
 	close(sock_desc);
 
 	return 0;
